@@ -1,0 +1,6 @@
+{
+  "name": "Qiskit Fall Fest 2026",
+  "description": "Official website experience for Qiskit Fall Fest 2026 at SRM University-AP in collaboration with IBM Quantum. Celebrating a Decade of Quantum on Cloud.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
