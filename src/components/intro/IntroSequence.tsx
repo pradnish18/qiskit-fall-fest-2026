@@ -243,15 +243,16 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
 
       // 4. AUTO — EVENT TEXT (~2.2–3.6s):
       // Editorial reveal: Qiskit Fall Fest 2026, SRM × IBM, Decade on Cloud
+      // Uses smooth exponential/power3 easing for cinematic, fluid entrance without snapping
       if (typographyRef.current) {
-        tl.to(typographyRef.current, { opacity: 1, duration: 0.3 }, 2.2);
+        tl.to(typographyRef.current, { opacity: 1, duration: 0.5, ease: 'power2.out' }, 2.2);
       }
 
       if (titleRef.current) {
         tl.fromTo(
           titleRef.current,
-          { y: 30, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.7, ease: 'power3.out' },
+          { y: 36, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.95, ease: 'power3.out' },
           2.25
         );
       }
@@ -259,8 +260,8 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       if (subtitleRef.current) {
         tl.fromTo(
           subtitleRef.current,
-          { y: 20, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.6, ease: 'power3.out' },
+          { y: 24, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.85, ease: 'power3.out' },
           2.55
         );
       }
@@ -268,8 +269,8 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       if (decadeRef.current) {
         tl.fromTo(
           decadeRef.current,
-          { y: 15, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out' },
+          { y: 18, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.8, ease: 'power3.out' },
           2.85
         );
       }
@@ -280,7 +281,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
         tl.fromTo(
           loadingContainerRef.current,
           { opacity: 0, y: 15 },
-          { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' },
+          { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' },
           3.6
         );
       }
@@ -305,15 +306,15 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
         3.65
       );
 
-      // At 100%, hold briefly, then only fade out the horizontal loading UI:
+      // At 100%, hold briefly, then smoothly fade out the horizontal loading UI:
       if (loadingContainerRef.current) {
         tl.to(
           loadingContainerRef.current,
           {
             opacity: 0,
-            y: 10,
-            duration: 0.4,
-            ease: 'power2.in',
+            y: 8,
+            duration: 0.65,
+            ease: 'power2.inOut',
           },
           5.1
         );
@@ -332,12 +333,13 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
   // the "EXPLORE THE QUANTUM COMPUTER" section upon first scroll.
   // ---------------------------------------------------------------------------
   const triggerExplore = useCallback(() => {
-    // Fade out event title text as quantum computer and explore UI reveal
+    // Gracefully fade out event title text as quantum computer and explore UI reveal
     if (typographyRef.current) {
       gsap.to(typographyRef.current, {
         opacity: 0,
-        y: -20,
-        duration: 0.45,
+        y: -24,
+        scale: 0.98,
+        duration: 0.75,
         ease: 'power2.inOut',
       });
     }
@@ -561,7 +563,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
             className="pointer-events-auto flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-[#3A0B10] bg-[#18191D]/80 hover:bg-[#6C151E] text-[#D9D9DC] hover:text-white text-[11px] font-mono-tech tracking-wider uppercase backdrop-blur-md transition-all cursor-pointer shadow-lg"
           >
             <span>Skip to Home</span>
-            <FastForward className="w-3 h-3 text-[#8A1B27]" />
+            <FastForward className="w-3 h-3 text-[#FF6B7A]" />
           </button>
         )}
       </div>
@@ -573,8 +575,8 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       >
         <div className="overflow-hidden mb-3 sm:mb-4">
           <div ref={titleRef}>
-            <h1 className="font-serif-title text-4xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight text-[#F5F3F0] font-black uppercase">
-              <span className="text-[#8A1B27] inline-block mr-3 sm:mr-4">QISKIT</span>
+            <h1 className="font-serif-title text-4xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight text-[#F5F3F0] font-black uppercase drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)]">
+              <span className="text-[#FF5C6C] inline-block mr-3 sm:mr-4 drop-shadow-[0_0_20px_rgba(255,92,108,0.5)]">QISKIT</span>
               FALL FEST 2026
             </h1>
           </div>
@@ -583,7 +585,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
         <div className="overflow-hidden mb-3">
           <div ref={subtitleRef}>
             <p className="text-xs sm:text-sm md:text-base font-mono-tech tracking-[0.25em] text-[#D9D9DC] uppercase">
-              SRM UNIVERSITY-AP <span className="text-[#8A1B27] mx-2">×</span> IBM QUANTUM
+              SRM UNIVERSITY-AP <span className="text-[#FF6B7A] mx-2 font-bold">×</span> IBM QUANTUM
             </p>
           </div>
         </div>
@@ -625,12 +627,12 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       {introState === 'WAIT_EXPLORE' && (
         <div
           onClick={() => advanceComponent('next')}
-          className="pointer-events-auto absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3.5 z-40 cursor-pointer group select-none animate-fade-in"
+          className="pointer-events-auto absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3.5 z-40 cursor-pointer group select-none animate-smooth-in"
         >
-          <span className="text-xs sm:text-sm font-mono-tech tracking-[0.35em] uppercase text-[#F5F3F0] group-hover:text-white transition-colors">
+          <span className="text-xs sm:text-sm font-mono-tech tracking-[0.35em] uppercase text-[#F5F3F0] group-hover:text-white transition-colors duration-300">
             SCROLL TO EXPLORE
           </span>
-          <div className="w-10 h-10 rounded-full border border-[#8A1B27] flex items-center justify-center bg-[#131417]/95 backdrop-blur-md group-hover:border-[#B3192B] group-hover:scale-105 transition-all shadow-[0_0_18px_rgba(138,27,39,0.35)]">
+          <div className="w-10 h-10 rounded-full border border-[#8A1B27] flex items-center justify-center bg-[#131417]/95 backdrop-blur-md group-hover:border-[#B3192B] group-hover:scale-105 transition-all duration-300 shadow-[0_0_18px_rgba(138,27,39,0.35)]">
             <ChevronDown className="w-4 h-4 text-[#8A1B27] group-hover:text-[#B3192B] animate-bounce" />
           </div>
         </div>
@@ -643,13 +645,13 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       {activeCompData && (
         <>
           {/* Header & Step Indicators: Responsive header bar */}
-          <div className="absolute top-16 md:top-20 left-4 sm:left-6 md:left-14 right-4 sm:right-6 md:right-14 z-30 flex items-start justify-between pointer-events-none animate-fade-in">
+          <div className="absolute top-16 md:top-20 left-4 sm:left-6 md:left-14 right-4 sm:right-6 md:right-14 z-30 flex items-start justify-between pointer-events-none animate-smooth-fade">
             <div>
               <p className="text-[9px] sm:text-[10px] md:text-xs font-mono-tech tracking-[0.25em] text-[#A7A8AD] uppercase mb-0.5">
                 EXPLORE THE
               </p>
               <h2 className="font-serif-title text-xl sm:text-2xl md:text-4xl text-[#F5F3F0] font-light leading-tight tracking-tight uppercase">
-                <span className="text-[#8A1B27] md:block font-bold mr-1.5 md:mr-0">QUANTUM</span>
+                <span className="text-[#FF5C6C] md:block font-bold mr-1.5 md:mr-0 drop-shadow-[0_0_12px_rgba(255,92,108,0.4)]">QUANTUM</span>
                 COMPUTER
               </h2>
               <p className="text-[11px] md:text-xs font-serif-body italic text-[#A7A8AD]/70 mt-0.5 hidden sm:block">
@@ -665,7 +667,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
                   <button
                     key={c.id}
                     onClick={() => callbacksRef.current.onStateChange(c.state)}
-                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full border transition-all text-[10px] sm:text-[11px] font-mono-tech cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full border transition-all duration-300 text-[10px] sm:text-[11px] font-mono-tech cursor-pointer ${
                       isActive
                         ? 'border-[#8A1B27] bg-[#8A1B27]/30 text-white shadow-[0_0_12px_rgba(138,27,39,0.5)]'
                         : 'border-[#3A0B10]/60 bg-[#18191D]/50 text-[#A7A8AD] hover:border-[#8A1B27]/50'
@@ -732,7 +734,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
                 strokeWidth="1.5"
                 strokeDasharray="1000"
                 strokeDashoffset="0"
-                className="transition-all duration-500"
+                className="transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
               />
             ) : (
               <polyline
@@ -746,7 +748,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
                 strokeWidth="1.5"
                 strokeDasharray="1000"
                 strokeDashoffset="0"
-                className="transition-all duration-500"
+                className="transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
               />
             )}
           </svg>
@@ -754,15 +756,17 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
           {/* Callout Text Box:
               - Mobile: positioned at bottom above the scroll prompt to leave the 3D model completely visible
               - Desktop: floating at side coordinates with SVG callout line
+              - Animated with smooth-in keyframe keyed by activeCompData.id for fluid re-entrance
           */}
           <div
-            className="absolute z-30 pointer-events-auto w-[calc(100%-2rem)] max-w-sm left-4 right-4 bottom-24 mx-auto md:w-auto md:left-auto md:right-auto md:bottom-auto transition-all duration-500"
+            key={activeCompData.id}
+            className="absolute z-30 pointer-events-auto w-[calc(100%-2rem)] max-w-sm left-4 right-4 bottom-24 mx-auto md:w-auto md:left-auto md:right-auto md:bottom-auto animate-smooth-in"
             style={typeof window !== 'undefined' && window.innerWidth >= 768 ? activeCompData.boxStyle : undefined}
           >
-            <div className="p-3.5 sm:p-4 md:p-5 rounded-lg border border-[#8A1B27]/40 bg-[#080809]/90 backdrop-blur-md shadow-[0_4px_30px_rgba(108,21,30,0.3)]">
+            <div className="p-3.5 sm:p-4 md:p-5 rounded-lg border border-[#8A1B27]/40 bg-[#080809]/90 backdrop-blur-md shadow-[0_4px_30px_rgba(108,21,30,0.3)] transition-all duration-500">
               {/* Component Number / Layer badge */}
               <div className="flex items-center justify-between md:block mb-1">
-                <span className="text-xs sm:text-sm md:text-base font-mono-tech font-bold text-[#8A1B27] block">
+                <span className="text-xs sm:text-sm md:text-base font-mono-tech font-bold text-[#FF6B7A] block">
                   {activeCompData.number}
                 </span>
                 <span className="text-[10px] font-mono-tech uppercase tracking-widest text-[#A7A8AD]/80 md:hidden">
@@ -785,13 +789,13 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
           {/* Bottom Prompt: SCROLL TO EXPLORE NEXT LAYER */}
           <div
             onClick={() => advanceComponent('next')}
-            className="pointer-events-auto absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 sm:gap-2 z-40 cursor-pointer group select-none"
+            className="pointer-events-auto absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 sm:gap-2 z-40 cursor-pointer group select-none animate-smooth-fade"
           >
-            <span className="text-[10px] sm:text-xs font-mono-tech tracking-[0.25em] uppercase text-[#A7A8AD] group-hover:text-white transition-colors">
+            <span className="text-[10px] sm:text-xs font-mono-tech tracking-[0.25em] uppercase text-[#A7A8AD] group-hover:text-white transition-colors duration-300">
               {activeCompData.id === '04' ? 'SCROLL TO COMPLETE' : 'SCROLL TO DISCOVER NEXT LAYER'}
             </span>
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-[#8A1B27]/50 flex items-center justify-center bg-[#18191D]/70 backdrop-blur-sm group-hover:border-[#8A1B27] group-hover:scale-110 transition-all">
-              <ChevronDown className="w-3.5 h-3.5 text-[#8A1B27] animate-bounce" />
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-[#FF6B7A]/50 flex items-center justify-center bg-[#18191D]/70 backdrop-blur-sm group-hover:border-[#FF6B7A] group-hover:scale-110 transition-all duration-300">
+              <ChevronDown className="w-3.5 h-3.5 text-[#FF6B7A] animate-bounce" />
             </div>
           </div>
         </>
@@ -801,12 +805,15 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       {/* 8. COMPLETE_COMPUTER: Full machine subtle activation & hold (~1.5s)   */}
       {/* ===================================================================== */}
       {introState === 'COMPLETE_COMPUTER' && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-          <div className="text-center animate-fade-in">
-            <span className="text-[11px] font-mono-tech tracking-[0.3em] uppercase text-[#8A1B27] block mb-1">
-              SYSTEM RE-SYNCHRONIZATION
-            </span>
-            <h2 className="font-serif-title text-xl sm:text-2xl text-[#F5F3F0] font-light uppercase tracking-wider">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 px-4">
+          <div className="text-center animate-smooth-scale px-6 sm:px-8 py-4 sm:py-5 rounded-xl bg-[#08080A]/85 backdrop-blur-md border border-[#FF6B7A]/30 shadow-[0_0_50px_rgba(0,0,0,0.85),0_0_20px_rgba(255,107,122,0.2)]">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FF4D61] animate-pulse" />
+              <span className="text-xs sm:text-sm font-mono-tech tracking-[0.3em] uppercase text-[#FF8594] font-semibold drop-shadow-[0_0_10px_rgba(255,133,148,0.7)]">
+                SYSTEM RE-SYNCHRONIZATION
+              </span>
+            </div>
+            <h2 className="font-serif-title text-xl sm:text-3xl text-[#FFFFFF] font-light uppercase tracking-wider drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
               QUANTUM CHANDELIER ACTIVE
             </h2>
           </div>
@@ -819,14 +826,14 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       {introState === 'WAIT_ENTER' && (
         <div
           onClick={() => triggerEnterHome()}
-          className="pointer-events-auto absolute bottom-12 sm:bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 z-40 cursor-pointer group select-none animate-fade-in"
+          className="pointer-events-auto absolute bottom-12 sm:bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 z-40 cursor-pointer group select-none animate-smooth-in"
         >
-          <div className="px-6 py-2.5 rounded-full border border-[#8A1B27] bg-[#080809]/90 backdrop-blur-md flex items-center gap-3 shadow-[0_0_30px_rgba(138,27,39,0.45)] group-hover:scale-105 transition-all">
-            <span className="w-2 h-2 rounded-full bg-[#8A1B27] animate-ping" />
+          <div className="px-6 py-2.5 rounded-full border border-[#FF6B7A]/50 bg-[#080809]/90 backdrop-blur-md flex items-center gap-3 shadow-[0_0_30px_rgba(255,107,122,0.35)] group-hover:scale-105 group-hover:border-[#FF6B7A] transition-all duration-300">
+            <span className="w-2 h-2 rounded-full bg-[#FF4D61] animate-ping" />
             <span className="text-xs sm:text-sm font-mono-tech tracking-[0.25em] uppercase text-[#F5F3F0] font-semibold">
               SCROLL TO ENTER
             </span>
-            <ChevronDown className="w-4 h-4 text-[#8A1B27] group-hover:translate-y-0.5 transition-transform" />
+            <ChevronDown className="w-4 h-4 text-[#FF6B7A] group-hover:translate-y-0.5 transition-transform duration-300" />
           </div>
         </div>
       )}

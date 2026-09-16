@@ -90,7 +90,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({ isDarkTheme = false }) =
                 </button>
 
                 {isOpen && (
-                  <div className="pt-3 pr-8 text-sm sm:text-base leading-relaxed animate-fade-in font-normal text-[#44464D] dark:text-[#A7A8AD]">
+                  <div className="pt-3 pr-8 text-sm sm:text-base leading-relaxed animate-smooth-in font-normal text-[#44464D] dark:text-[#A7A8AD]">
                     {faq.a}
                   </div>
                 )}
