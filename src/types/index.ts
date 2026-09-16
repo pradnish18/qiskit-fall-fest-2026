@@ -35,15 +35,15 @@ export interface NavItem {
 }
 
 export type IntroState =
-  | 'INTRO_BLANK'
-  | 'INTRO_LINE'
-  | 'INTRO_FIELD'
-  | 'INTRO_TEXT'
-  | 'INTRO_LOADING'
-  | 'WAIT_FIRST_SCROLL'
-  | 'ASSEMBLY'
-  | 'ACTIVATION'
-  | 'WAIT_SECOND_SCROLL'
+  | 'INTRO'
+  | 'WAIT_EXPLORE'
+  | 'COMPUTER_REVEAL'
+  | 'COMPONENT_01'
+  | 'COMPONENT_02'
+  | 'COMPONENT_03'
+  | 'COMPONENT_04'
+  | 'COMPLETE_COMPUTER'
+  | 'WAIT_ENTER'
   | 'ENTER_HOME'
   | 'HOME';
 

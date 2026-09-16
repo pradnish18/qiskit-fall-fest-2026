@@ -17,13 +17,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   onReplayIntro,
   visible = true,
 }) => {
-  const [activeSection, setActiveSection] = useState<string>('venues');
+  const [activeSection, setActiveSection] = useState<string>('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Smooth scroll and track active section on click or scroll
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + 120;
+      // On home screen (top of page), nothing should be selected
+      if (window.scrollY < 450) {
+        setActiveSection('');
+        return;
+      }
+
+      const scrollPosition = window.scrollY + 140;
       const sectionIds = ['about', 'experience', 'schedule', 'venues', 'team', 'faqs'];
       
       for (let i = sectionIds.length - 1; i >= 0; i--) {
@@ -38,16 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         }
       }
       
-      // Default to venues or about if near the top
-      if (window.scrollY < 400) {
-        // If hash in URL, match that; else default to 'venues' as shown in the reference design
-        const hash = window.location.hash.replace('#', '');
-        if (hash && sectionIds.includes(hash)) {
-          setActiveSection(hash);
-        } else {
-          setActiveSection('venues');
-        }
-      }
+      setActiveSection('');
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -90,6 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           href="#"
           onClick={(e) => {
             e.preventDefault();
+            setActiveSection('');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className="group flex flex-col focus:outline-none"

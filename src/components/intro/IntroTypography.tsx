@@ -12,23 +12,27 @@ export const IntroTypography: React.FC<IntroTypographyProps> = ({
 }) => {
   if (introPhase === 'HOME') return null;
 
-  const isRevealed = introPhase !== 'INTRO_BLANK' && introPhase !== 'INTRO_LINE';
+  const isRevealed = introPhase === 'INTRO' || introPhase === 'WAIT_EXPLORE';
   const isReceding =
-    introPhase === 'ASSEMBLY' ||
-    introPhase === 'ACTIVATION' ||
-    introPhase === 'WAIT_SECOND_SCROLL' ||
+    introPhase === 'COMPUTER_REVEAL' ||
+    introPhase === 'COMPONENT_01' ||
+    introPhase === 'COMPONENT_02' ||
+    introPhase === 'COMPONENT_03' ||
+    introPhase === 'COMPONENT_04' ||
+    introPhase === 'COMPLETE_COMPUTER' ||
+    introPhase === 'WAIT_ENTER' ||
     introPhase === 'ENTER_HOME';
 
   // Opacity and scale based on phase
   let opacity = 0;
   let transform = 'scale(1) translateZ(0)';
 
-  if (introPhase === 'INTRO_TEXT' || introPhase === 'INTRO_LOADING') {
+  if (introPhase === 'INTRO') {
     opacity = 1;
     transform = 'scale(1) translateZ(0)';
-  } else if (introPhase === 'WAIT_FIRST_SCROLL' || introPhase === 'ASSEMBLY') {
-    opacity = 0.35;
-    transform = 'scale(0.88) translateY(-40px) translateZ(-100px)';
+  } else if (introPhase === 'WAIT_EXPLORE') {
+    opacity = 0.85;
+    transform = 'scale(0.95) translateY(-20px) translateZ(-50px)';
   } else if (isReceding) {
     opacity = 0;
     transform = 'scale(0.8) translateY(-80px) translateZ(-200px)';

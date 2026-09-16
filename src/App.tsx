@@ -9,9 +9,9 @@ import { VideoModal } from './components/modals/VideoModal';
 import { VenueDetailsModal } from './components/modals/VenueDetailsModal';
 
 export default function App() {
-  // Deterministic state machine starting at STATE 0: INTRO_BLANK
-  const [introState, setIntroState] = useState<IntroState>('INTRO_BLANK');
-  const [assemblyProgress, setAssemblyProgress] = useState(0);
+  // Explicit state machine:
+  // INTRO → WAIT_EXPLORE → COMPUTER_REVEAL → COMPONENT_01 → COMPONENT_02 → COMPONENT_03 → COMPONENT_04 → COMPLETE_COMPUTER → WAIT_ENTER → ENTER_HOME → HOME
+  const [introState, setIntroState] = useState<IntroState>('INTRO');
   const [activationProgress, setActivationProgress] = useState(0);
   const [transitionProgress, setTransitionProgress] = useState(0);
   const [sceneOpacity, setSceneOpacity] = useState(0);
@@ -38,14 +38,26 @@ export default function App() {
     }
   }, [isDarkTheme]);
 
+  // Lock body/document scrolling during all intro & exploration states.
+  // Unlock only after entering HOME!
+  useEffect(() => {
+    if (introState === 'HOME') {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    } else {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      window.scrollTo(0, 0);
+    }
+  }, [introState]);
+
   // Restart intro cinematic experience
   const handleReplayIntro = () => {
     window.scrollTo({ top: 0, behavior: 'instant' });
-    setAssemblyProgress(0);
     setActivationProgress(0);
     setTransitionProgress(0);
     setSceneOpacity(0);
-    setIntroState('INTRO_BLANK');
+    setIntroState('INTRO');
   };
 
   const handleIntroComplete = useCallback(() => {
@@ -58,7 +70,7 @@ export default function App() {
 
   // Compute background color
   const getBackgroundColor = () => {
-    if (introState === 'HOME') {
+    if (introState === 'ENTER_HOME' || introState === 'HOME') {
       return isDarkTheme ? '#080809' : '#F5F3F0';
     }
     return '#080809';
@@ -86,19 +98,17 @@ export default function App() {
       {/* 1. The Persistent 3D Canvas (z-10, in front of background, continuous instance) */}
       <PersistentQuantumScene
         introPhase={introState}
-        assemblyProgress={assemblyProgress}
         activationProgress={activationProgress}
         transitionProgress={transitionProgress}
         sceneOpacity={sceneOpacity}
         isDarkTheme={isDarkTheme}
       />
 
-      {/* 2. Cinematic Intro Sequence Overlay (Deterministic State Machine) */}
+      {/* 2. Cinematic Intro Sequence Overlay (Explicit State Machine) */}
       {introState !== 'HOME' && (
         <IntroSequence
           introState={introState}
           onStateChange={setIntroState}
-          onAssemblyProgress={setAssemblyProgress}
           onActivationProgress={setActivationProgress}
           onSceneOpacity={setSceneOpacity}
           onTransitionProgress={setTransitionProgress}

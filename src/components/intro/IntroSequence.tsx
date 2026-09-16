@@ -1,54 +1,109 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { gsap } from 'gsap';
-import { ChevronDown, FastForward } from 'lucide-react';
+import gsap from 'gsap';
+import { FastForward, ChevronDown } from 'lucide-react';
 import { IntroState } from '../../types';
 
 interface IntroSequenceProps {
   introState: IntroState;
   onStateChange: (state: IntroState) => void;
-  onAssemblyProgress: (progress: number) => void;
   onActivationProgress: (progress: number) => void;
   onSceneOpacity: (opacity: number) => void;
   onTransitionProgress: (progress: number) => void;
   onComplete: () => void;
 }
 
+interface ComponentData {
+  id: '01' | '02' | '03' | '04';
+  state: IntroState;
+  number: string;
+  name: string;
+  description: string;
+  positionSide: 'left' | 'right';
+  targetPercent: { x: number; y: number }; // Model anchor point % of viewport
+  boxStyle: { top: string; left?: string; right?: string };
+}
+
+const COMPONENTS: ComponentData[] = [
+  {
+    id: '01',
+    state: 'COMPONENT_01',
+    number: '01',
+    name: 'UPPER CRYOGENIC STRUCTURE',
+    description: 'Layered cooling and shielding assembly.',
+    positionSide: 'right',
+    targetPercent: { x: 50, y: 21 },
+    boxStyle: { top: '15%', right: '10%' },
+  },
+  {
+    id: '02',
+    state: 'COMPONENT_02',
+    number: '02',
+    name: 'PRECISION SUPPORT PLATES',
+    description: 'Machined stages that support the internal hardware.',
+    positionSide: 'left',
+    targetPercent: { x: 48, y: 31 },
+    boxStyle: { top: '26%', left: '10%' },
+  },
+  {
+    id: '03',
+    state: 'COMPONENT_03',
+    number: '03',
+    name: 'SIGNAL & CONTROL WIRING',
+    description: 'Fine connections routed through the system.',
+    positionSide: 'right',
+    targetPercent: { x: 53, y: 43 },
+    boxStyle: { top: '40%', right: '10%' },
+  },
+  {
+    id: '04',
+    state: 'COMPONENT_04',
+    number: '04',
+    name: 'QUANTUM CORE REGION',
+    description: 'Central hardware area where the quantum device is housed.',
+    positionSide: 'left',
+    targetPercent: { x: 47, y: 58 },
+    boxStyle: { top: '54%', left: '10%' },
+  },
+];
+
 export const IntroSequence: React.FC<IntroSequenceProps> = ({
   introState,
   onStateChange,
-  onAssemblyProgress,
   onActivationProgress,
   onSceneOpacity,
   onTransitionProgress,
   onComplete,
 }) => {
-  // DOM Refs for 2D Intro elements
   const containerRef = useRef<HTMLDivElement>(null);
   const centerLineRef = useRef<HTMLDivElement>(null);
   const fieldExpansionRef = useRef<HTMLDivElement>(null);
+  const topBarRef = useRef<HTMLDivElement>(null);
+
+  // Masked typography refs
   const typographyRef = useRef<HTMLDivElement>(null);
-  const titleRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
   const decadeRef = useRef<HTMLDivElement>(null);
+
+  // Loading progress bar refs
   const loadingContainerRef = useRef<HTMLDivElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const percentTextRef = useRef<HTMLSpanElement>(null);
-  const firstScrollCueRef = useRef<HTMLDivElement>(null);
-  const secondScrollCueRef = useRef<HTMLDivElement>(null);
-  const topBarRef = useRef<HTMLDivElement>(null);
 
-  // Active GSAP Timelines
-  const tlBlockARef = useRef<gsap.core.Timeline | null>(null);
-  const tlBlockBRef = useRef<gsap.core.Timeline | null>(null);
-  const tlBlockCRef = useRef<gsap.core.Timeline | null>(null);
+  // GSAP timelines
+  const tlIntroRef = useRef<gsap.core.Timeline | null>(null);
+  const tlRevealRef = useRef<gsap.core.Timeline | null>(null);
+  const tlTransitionRef = useRef<gsap.core.Timeline | null>(null);
 
-  // Skip capability
+  // Cooldown / Debounce timestamp to prevent multi-skipping during scroll
+  const lastScrollTime = useRef<number>(0);
+
+  // Skip button state
   const [canSkip, setCanSkip] = useState(false);
 
-  // Stable callbacks ref to avoid stale closures
+  // Stable callbacks ref
   const callbacksRef = useRef({
     onStateChange,
-    onAssemblyProgress,
     onActivationProgress,
     onSceneOpacity,
     onTransitionProgress,
@@ -57,20 +112,16 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
 
   callbacksRef.current = {
     onStateChange,
-    onAssemblyProgress,
     onActivationProgress,
     onSceneOpacity,
     onTransitionProgress,
     onComplete,
   };
 
-  // -------------------------------------------------------------
-  // GLOBAL SCROLL CONTROL & LOCKING RULE:
-  // Before first scroll: DISABLED
-  // During assembly & activation: DISABLED
-  // After assembly: ENABLED ONLY FOR SECOND SCROLL
-  // After second scroll starts: normal Home page scroll
-  // -------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // GLOBAL SCROLL LOCKING:
+  // Strictly locked for all intro & exploration phases. Unlocked ONLY in HOME!
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (introState === 'HOME') {
       document.body.style.overflow = '';
@@ -78,106 +129,80 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       return;
     }
 
-    // Lock scrolling on document
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
 
-    // Prevent wheel, touchmove, and scroll keys during locked intro states
-    const preventScroll = (e: Event) => {
-      // In WAIT_FIRST_SCROLL and WAIT_SECOND_SCROLL, the custom listeners handle the trigger
+    const preventDefault = (e: Event) => {
       e.preventDefault();
     };
 
-    const preventScrollKeys = (e: KeyboardEvent) => {
-      const keys = ['Space', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
-      if (keys.includes(e.code)) {
-        e.preventDefault();
-      }
-    };
-
-    window.addEventListener('wheel', preventScroll, { passive: false });
-    window.addEventListener('touchmove', preventScroll, { passive: false });
-    window.addEventListener('keydown', preventScrollKeys, { passive: false });
+    window.addEventListener('wheel', preventDefault, { passive: false });
+    window.addEventListener('touchmove', preventDefault, { passive: false });
 
     return () => {
-      window.removeEventListener('wheel', preventScroll);
-      window.removeEventListener('touchmove', preventScroll);
-      window.removeEventListener('keydown', preventScrollKeys);
+      window.removeEventListener('wheel', preventDefault);
+      window.removeEventListener('touchmove', preventDefault);
     };
   }, [introState]);
 
-  // Fast-forward skip handler
+  // Fast-forward skip handler to go straight to Home
   const handleSkip = useCallback(() => {
-    // Kill any active timelines
-    tlBlockARef.current?.kill();
-    tlBlockBRef.current?.kill();
-    tlBlockCRef.current?.kill();
+    tlIntroRef.current?.kill();
+    tlRevealRef.current?.kill();
+    tlTransitionRef.current?.kill();
 
     callbacksRef.current.onSceneOpacity(1.0);
-    callbacksRef.current.onAssemblyProgress(1.0);
     callbacksRef.current.onActivationProgress(1.0);
     callbacksRef.current.onTransitionProgress(1.0);
     callbacksRef.current.onStateChange('HOME');
     callbacksRef.current.onComplete();
     document.body.style.overflow = '';
     document.documentElement.style.overflow = '';
-    console.log('[INTRO] complete');
   }, []);
 
-  // -------------------------------------------------------------
-  // BLOCK A: STATE 0 → STATE 1 → STATE 2 → STATE 3 → STATE 4 → WAIT_FIRST_SCROLL
-  // Purely deterministic GSAP Timeline (0.0s to ~5.7s)
-  // -------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // 1. AUTO INTRO TIMELINE
+  // 0.0s - 0.8s: Blank #080809 screen
+  // 0.8s - 1.5s: Thin burgundy line expands horizontally from center
+  // 1.5s - 2.2s: Burgundy field vertically expands to fill screen; line fades
+  // 2.2s - 3.6s: Text reveals: QISKIT FALL FEST 2026, SRM × IBM, A Decade of Quantum
+  // 3.6s - 5.0s: Loading bar runs 0% → 100%
+  // 5.0s - 5.4s: Hold at 100%
+  // 5.4s - 5.8s: Text and loading bar disappear completely
+  // 5.8s: STOP and transition to WAIT_EXPLORE
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    // Enable skip button after 1s
-    const skipTimer = setTimeout(() => setCanSkip(true), 1000);
+    const skipTimer = setTimeout(() => setCanSkip(true), 1200);
 
     // Initial resets
     callbacksRef.current.onSceneOpacity(0.0);
-    callbacksRef.current.onAssemblyProgress(0.0);
     callbacksRef.current.onActivationProgress(0.0);
     callbacksRef.current.onTransitionProgress(0.0);
-
-    console.log('[INTRO] blank');
-    callbacksRef.current.onStateChange('INTRO_BLANK');
+    callbacksRef.current.onStateChange('INTRO');
 
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({
         paused: false,
         onComplete: () => {
-          // Transition into State 4B: WAIT_FIRST_SCROLL
-          console.log('[INTRO] waiting for first scroll');
-          callbacksRef.current.onStateChange('WAIT_FIRST_SCROLL');
-
-          // Reveal minimal "SCROLL DOWN" cue
-          if (firstScrollCueRef.current) {
-            gsap.fromTo(
-              firstScrollCueRef.current,
-              { opacity: 0, y: 15 },
-              { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' }
-            );
-          }
+          // Automatic intro finished -> stop and wait for user's first scroll
+          callbacksRef.current.onStateChange('WAIT_EXPLORE');
         },
       });
 
-      tlBlockARef.current = tl;
+      tlIntroRef.current = tl;
 
-      // STATE 0: BLANK START (0.0s - 0.8s)
-      // Screen intentionally empty with subtle header chrome fading in
+      // Top status bar chrome fades in softly
       if (topBarRef.current) {
         tl.to(topBarRef.current, { opacity: 1, duration: 0.6, ease: 'power1.out' }, 0.2);
       }
 
-      // STATE 1: CENTER BURGUNDY LINE (0.8s - 1.7s)
-      tl.call(() => {
-        console.log('[INTRO] line');
-        callbacksRef.current.onStateChange('INTRO_LINE');
-      }, [], 0.8);
-
+      // 2. AUTO — BURGUNDY LINE (~0.8–1.5s):
+      // A very thin deep-burgundy line starts from exact center and expands horizontally
       if (centerLineRef.current) {
         tl.fromTo(
           centerLineRef.current,
-          { width: '2px', opacity: 0 },
+          { width: '0px', opacity: 0 },
           {
             width: '92vw',
             opacity: 1,
@@ -188,12 +213,8 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
         );
       }
 
-      // STATE 2: BURGUNDY FIELD EXPANSION (1.7s - 2.4s)
-      tl.call(() => {
-        console.log('[INTRO] field');
-        callbacksRef.current.onStateChange('INTRO_FIELD');
-      }, [], 1.7);
-
+      // 3. AUTO — BURGUNDY FIELD (~1.5–2.2s):
+      // The burgundy glow expands vertically from that line until it fills the screen. Line fades away.
       if (fieldExpansionRef.current) {
         tl.fromTo(
           fieldExpansionRef.current,
@@ -204,39 +225,34 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
             duration: 0.7,
             ease: 'power2.out',
           },
-          1.7
+          1.5
         );
       }
 
-      // Center line dissolves into the expanding burgundy radiance
       if (centerLineRef.current) {
         tl.to(
           centerLineRef.current,
           {
-            opacity: 0.2,
-            duration: 0.6,
+            opacity: 0,
+            duration: 0.5,
             ease: 'power1.out',
           },
-          1.8
+          1.7
         );
       }
 
-      // STATE 3: EVENT IDENTITY TEXT REVEAL (2.4s - 3.7s)
-      tl.call(() => {
-        console.log('[INTRO] text');
-        callbacksRef.current.onStateChange('INTRO_TEXT');
-      }, [], 2.4);
-
+      // 4. AUTO — EVENT TEXT (~2.2–3.6s):
+      // Editorial reveal: Qiskit Fall Fest 2026, SRM × IBM, Decade on Cloud
       if (typographyRef.current) {
-        tl.to(typographyRef.current, { opacity: 1, duration: 0.3 }, 2.4);
+        tl.to(typographyRef.current, { opacity: 1, duration: 0.3 }, 2.2);
       }
 
       if (titleRef.current) {
         tl.fromTo(
           titleRef.current,
-          { y: 35, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.8, ease: 'power3.out' },
-          2.45
+          { y: 30, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.7, ease: 'power3.out' },
+          2.25
         );
       }
 
@@ -245,7 +261,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
           subtitleRef.current,
           { y: 20, opacity: 0 },
           { y: 0, opacity: 1, duration: 0.6, ease: 'power3.out' },
-          2.65
+          2.55
         );
       }
 
@@ -258,28 +274,23 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
         );
       }
 
-      // STATE 4: LOADING SYSTEM & PROGRESS BAR (3.7s - 5.2s)
-      tl.call(() => {
-        console.log('[INTRO] loading');
-        callbacksRef.current.onStateChange('INTRO_LOADING');
-      }, [], 3.7);
-
+      // 5. AUTO — LOADING BAR (~3.6–5.2s):
+      // Thin horizontal loading bar and percentage genuinely animating 0% → 100%
       if (loadingContainerRef.current) {
         tl.fromTo(
           loadingContainerRef.current,
           { opacity: 0, y: 15 },
           { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' },
-          3.7
+          3.6
         );
       }
 
-      // Animate progress 0% → 20% → 40% → 60% → 80% → 100%
       const progressObj = { pct: 0 };
       tl.to(
         progressObj,
         {
           pct: 100,
-          duration: 1.25,
+          duration: 1.4,
           ease: 'power1.inOut',
           onUpdate: () => {
             const currentPct = Math.round(progressObj.pct);
@@ -291,21 +302,20 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
             }
           },
         },
-        3.75
+        3.65
       );
 
-      // Hold at 100% for 0.5 seconds (until 5.5s)
-      // ONLY the horizontal progress bar disappears at state 4; the main text remains visible!
+      // At 100%, hold briefly, then only fade out the horizontal loading UI:
       if (loadingContainerRef.current) {
         tl.to(
           loadingContainerRef.current,
           {
             opacity: 0,
-            y: 15,
-            duration: 0.45,
+            y: 10,
+            duration: 0.4,
             ease: 'power2.in',
           },
-          5.4
+          5.1
         );
       }
     }, containerRef);
@@ -316,183 +326,58 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
     };
   }, []);
 
-  // -------------------------------------------------------------
-  // FIRST SCROLL GESTURE HANDLER (Transitions State 4B -> State 5)
-  // Single-fire listener, exactly one trigger
-  // -------------------------------------------------------------
-  const triggerFirstScroll = useCallback(() => {
-    // Hide "SCROLL DOWN" cue
-    if (firstScrollCueRef.current) {
-      gsap.to(firstScrollCueRef.current, { opacity: 0, y: 15, duration: 0.3 });
-    }
-
-    // Fade out main text and center line as 3D assembly begins
+  // ---------------------------------------------------------------------------
+  // 2. FIRST USER SCROLL -> DIRECTLY TO COMPONENT_01 (EXPLORE THE QUANTUM COMPUTER)
+  // Eliminates the intermediate blank holding section so the user directly enters
+  // the "EXPLORE THE QUANTUM COMPUTER" section upon first scroll.
+  // ---------------------------------------------------------------------------
+  const triggerExplore = useCallback(() => {
+    // Fade out event title text as quantum computer and explore UI reveal
     if (typographyRef.current) {
       gsap.to(typographyRef.current, {
         opacity: 0,
-        y: -25,
-        duration: 0.6,
-        ease: 'power2.in',
-      });
-    }
-
-    if (centerLineRef.current) {
-      gsap.to(centerLineRef.current, {
-        opacity: 0,
-        duration: 0.4,
-      });
-    }
-
-    // Fade out 2D field as 3D assembly begins
-    if (fieldExpansionRef.current) {
-      gsap.to(fieldExpansionRef.current, { opacity: 0, duration: 0.5 });
-    }
-
-    callbacksRef.current.onSceneOpacity(1.0);
-
-    // Update state to ASSEMBLY and begin Block B
-    console.log('[INTRO] assembly');
-    callbacksRef.current.onStateChange('ASSEMBLY');
-
-    // -----------------------------------------------------------
-    // BLOCK B: STATE 5 (ASSEMBLY → ACTIVATION → COMPLETED COMPUTER HOLD)
-    // -----------------------------------------------------------
-    const tlB = gsap.timeline({
-      onComplete: () => {
-        // State 6: WAIT FOR SECOND SCROLL
-        console.log('[INTRO] waiting for second scroll');
-        callbacksRef.current.onStateChange('WAIT_SECOND_SCROLL');
-
-        if (secondScrollCueRef.current) {
-          gsap.fromTo(
-            secondScrollCueRef.current,
-            { opacity: 0, y: 15 },
-            { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' }
-          );
-        }
-      },
-    });
-
-    tlBlockBRef.current = tlB;
-
-    // STATE 5A-C: Assembly progress 0.0 -> 1.0 (3.0s duration)
-    // 10 components enter from edges/corners/depths, decelerate, align, overshoot, settle, lock
-    const assemblyObj = { val: 0 };
-    tlB.to(
-      assemblyObj,
-      {
-        val: 1.0,
-        duration: 3.0,
+        y: -20,
+        duration: 0.45,
         ease: 'power2.inOut',
-        onUpdate: () => {
-          callbacksRef.current.onAssemblyProgress(assemblyObj.val);
-        },
-      },
-      0.0
-    );
+      });
+    }
 
-    // Brief settling pause (0.2s)
-    // STATE 5D: Activation (3.2s - 4.2s)
-    tlB.call(() => {
-      console.log('[INTRO] activation');
-      callbacksRef.current.onStateChange('ACTIVATION');
-    }, [], 3.2);
+    // Activate 3D scene directly
+    callbacksRef.current.onSceneOpacity(1.0);
+    callbacksRef.current.onActivationProgress(1.0);
 
-    const activationObj = { val: 0 };
-    tlB.to(
-      activationObj,
-      {
-        val: 1.0,
-        duration: 1.0,
-        ease: 'power2.out',
-        onUpdate: () => {
-          callbacksRef.current.onActivationProgress(activationObj.val);
-        },
-      },
-      3.2
-    );
-
-    // STATE 5E: Completed Computer Hold in Center (4.2s - 5.8s, ~1.6s)
-    // Machine is complete and rotating in center
-    tlB.to({}, { duration: 1.6 }, 4.2);
+    // Go directly to COMPONENT_01 ("EXPLORE THE QUANTUM COMPUTER")
+    callbacksRef.current.onStateChange('COMPONENT_01');
   }, []);
 
-  // Listen for First Scroll during WAIT_FIRST_SCROLL
-  useEffect(() => {
-    if (introState !== 'WAIT_FIRST_SCROLL') return;
+  // ---------------------------------------------------------------------------
+  // 3. TRANSITION TO COMPLETE_COMPUTER -> WAIT_ENTER
+  // After component 04, restores whole machine to normal appearance,
+  // runs subtle activation, holds centered for ~1.5s, then shows SCROLL TO ENTER.
+  // ---------------------------------------------------------------------------
+  const triggerCompleteComputer = useCallback(() => {
+    callbacksRef.current.onStateChange('COMPLETE_COMPUTER');
 
-    let triggered = false;
-    let touchStartY = 0;
+    // Restore full brilliance
+    callbacksRef.current.onActivationProgress(1.0);
 
-    const onWheel = (e: WheelEvent) => {
-      if (triggered) return;
-      if (e.deltaY > 10) {
-        triggered = true;
-        cleanup();
-        triggerFirstScroll();
-      }
-    };
+    // Hold centered for ~1.5s, then advance to WAIT_ENTER
+    setTimeout(() => {
+      callbacksRef.current.onStateChange('WAIT_ENTER');
+    }, 1500);
+  }, []);
 
-    const onTouchStart = (e: TouchEvent) => {
-      touchStartY = e.touches[0].clientY;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (triggered) return;
-      const currentY = e.touches[0].clientY;
-      if (touchStartY - currentY > 20) {
-        triggered = true;
-        cleanup();
-        triggerFirstScroll();
-      }
-    };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (triggered) return;
-      if (['ArrowDown', 'PageDown', 'Space'].includes(e.code)) {
-        triggered = true;
-        cleanup();
-        triggerFirstScroll();
-      }
-    };
-
-    const cleanup = () => {
-      window.removeEventListener('wheel', onWheel);
-      window.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-
-    window.addEventListener('wheel', onWheel, { passive: true });
-    window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('keydown', onKeyDown);
-
-    return cleanup;
-  }, [introState, triggerFirstScroll]);
-
-  // -------------------------------------------------------------
-  // SECOND SCROLL GESTURE HANDLER (Transitions State 6 -> State 7 -> HOME)
-  // Single-fire listener
-  // -------------------------------------------------------------
-  const triggerSecondScroll = useCallback(() => {
-    // Hide "SCROLL TO ENTER" cue
-    if (secondScrollCueRef.current) {
-      gsap.to(secondScrollCueRef.current, { opacity: 0, y: 15, duration: 0.3 });
-    }
-
-    console.log('[INTRO] entering home');
+  // ---------------------------------------------------------------------------
+  // 4. FINAL SCROLL -> ENTER_HOME
+  // Smooth continuous transition of the same 3D computer into the right side
+  // of Home hero while camera pulls back and Home content reveals on left.
+  // ---------------------------------------------------------------------------
+  const triggerEnterHome = useCallback(() => {
     callbacksRef.current.onStateChange('ENTER_HOME');
 
-    // -----------------------------------------------------------
-    // BLOCK C: STATE 7 (TRANSITION TO HOME HERO)
-    // Animates transitionProgress 0.0 -> 1.0 (2.0s duration)
-    // Camera pulls back, computer drifts to right side, Home hero appears
-    // -----------------------------------------------------------
     const transObj = { val: 0 };
-    const tlC = gsap.timeline({
+    const tlTrans = gsap.timeline({
       onComplete: () => {
-        console.log('[INTRO] complete');
         callbacksRef.current.onStateChange('HOME');
         callbacksRef.current.onComplete();
         // Unlock normal page scrolling
@@ -501,13 +386,13 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       },
     });
 
-    tlBlockCRef.current = tlC;
+    tlTransitionRef.current = tlTrans;
 
-    tlC.to(
+    tlTrans.to(
       transObj,
       {
         val: 1.0,
-        duration: 2.0,
+        duration: 1.8,
         ease: 'power2.inOut',
         onUpdate: () => {
           callbacksRef.current.onTransitionProgress(transObj.val);
@@ -518,11 +403,11 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
 
     // Fade out overlay container
     if (containerRef.current) {
-      tlC.to(
+      tlTrans.to(
         containerRef.current,
         {
           opacity: 0,
-          duration: 1.2,
+          duration: 1.0,
           ease: 'power2.out',
         },
         0.8
@@ -530,19 +415,62 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
     }
   }, []);
 
-  // Listen for Second Scroll during WAIT_SECOND_SCROLL
-  useEffect(() => {
-    if (introState !== 'WAIT_SECOND_SCROLL') return;
+  // ---------------------------------------------------------------------------
+  // COMPONENT EXPLORATION NAVIGATION (Forward / Backward)
+  // Advances strictly ONE component per scroll event with cooldown gating.
+  // ---------------------------------------------------------------------------
+  const advanceComponent = useCallback(
+    (direction: 'next' | 'prev') => {
+      const now = Date.now();
+      if (now - lastScrollTime.current < 650) return; // 650ms debounce
+      lastScrollTime.current = now;
 
-    let triggered = false;
+      if (direction === 'next') {
+        if (introState === 'WAIT_EXPLORE') {
+          triggerExplore();
+        } else if (introState === 'COMPONENT_01') {
+          callbacksRef.current.onStateChange('COMPONENT_02');
+        } else if (introState === 'COMPONENT_02') {
+          callbacksRef.current.onStateChange('COMPONENT_03');
+        } else if (introState === 'COMPONENT_03') {
+          callbacksRef.current.onStateChange('COMPONENT_04');
+        } else if (introState === 'COMPONENT_04') {
+          triggerCompleteComputer();
+        } else if (introState === 'WAIT_ENTER') {
+          triggerEnterHome();
+        }
+      } else if (direction === 'prev') {
+        if (introState === 'COMPONENT_04') {
+          callbacksRef.current.onStateChange('COMPONENT_03');
+        } else if (introState === 'COMPONENT_03') {
+          callbacksRef.current.onStateChange('COMPONENT_02');
+        } else if (introState === 'COMPONENT_02') {
+          callbacksRef.current.onStateChange('COMPONENT_01');
+        }
+      }
+    },
+    [introState, triggerExplore, triggerCompleteComputer, triggerEnterHome]
+  );
+
+  // ---------------------------------------------------------------------------
+  // SCROLL & GESTURE EVENT LISTENER
+  // Intercepts wheel, touch, and arrow keys to step through the state machine.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (introState === 'HOME' || introState === 'INTRO' || introState === 'COMPUTER_REVEAL' || introState === 'COMPLETE_COMPUTER' || introState === 'ENTER_HOME') {
+      // Auto phases or normal scrolling: do not listen for step events
+      return;
+    }
+
     let touchStartY = 0;
 
     const onWheel = (e: WheelEvent) => {
-      if (triggered) return;
-      if (e.deltaY > 10) {
-        triggered = true;
-        cleanup();
-        triggerSecondScroll();
+      e.preventDefault();
+      if (Math.abs(e.deltaY) < 6) return;
+      if (e.deltaY > 0) {
+        advanceComponent('next');
+      } else {
+        advanceComponent('prev');
       }
     };
 
@@ -551,40 +479,46 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (triggered) return;
+      e.preventDefault();
       const currentY = e.touches[0].clientY;
-      if (touchStartY - currentY > 20) {
-        triggered = true;
-        cleanup();
-        triggerSecondScroll();
+      const diff = touchStartY - currentY;
+      if (Math.abs(diff) > 25) {
+        if (diff > 0) {
+          advanceComponent('next');
+        } else {
+          advanceComponent('prev');
+        }
+        touchStartY = currentY;
       }
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (triggered) return;
-      if (['ArrowDown', 'PageDown', 'Space'].includes(e.code)) {
-        triggered = true;
-        cleanup();
-        triggerSecondScroll();
+      if (['ArrowDown', 'PageDown', 'Space', 'Enter'].includes(e.code)) {
+        e.preventDefault();
+        advanceComponent('next');
+      } else if (['ArrowUp', 'PageUp'].includes(e.code)) {
+        e.preventDefault();
+        advanceComponent('prev');
       }
     };
 
-    const cleanup = () => {
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('keydown', onKeyDown, { passive: false });
+
+    return () => {
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('touchstart', onTouchStart);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('keydown', onKeyDown);
     };
+  }, [introState, advanceComponent]);
 
-    window.addEventListener('wheel', onWheel, { passive: true });
-    window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('keydown', onKeyDown);
+  // Current active component data if in exploration mode
+  const activeCompData = COMPONENTS.find((c) => c.state === introState);
 
-    return cleanup;
-  }, [introState, triggerSecondScroll]);
-
-  // If already in HOME, overlay is completely gone
+  // If already reached HOME, overlay is completely gone
   if (introState === 'HOME') {
     return null;
   }
@@ -595,17 +529,17 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
       id="intro-sequence-overlay"
       className="fixed inset-0 z-30 pointer-events-none select-none bg-transparent overflow-hidden"
     >
-      {/* 1. STATE 2: BURGUNDY FIELD EXPANSION LAYER (Vertically expands from center line) */}
+      {/* 1. BURGUNDY FIELD EXPANSION LAYER */}
       <div
         ref={fieldExpansionRef}
         className="absolute inset-0 pointer-events-none opacity-0 origin-center"
         style={{
           background:
-            'radial-gradient(circle 800px at 50% 50%, rgba(138, 27, 39, 0.42) 0%, rgba(108, 21, 30, 0.22) 40%, transparent 80%)',
+            'radial-gradient(ellipse 90% 70% at 50% 50%, rgba(138, 27, 39, 0.42) 0%, rgba(108, 21, 30, 0.22) 45%, transparent 80%)',
         }}
       />
 
-      {/* 2. STATE 1: HORIZONTAL BURGUNDY CENTER LINE */}
+      {/* 2. HORIZONTAL BURGUNDY CENTER LINE */}
       <div
         ref={centerLineRef}
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[1.5px] pointer-events-none z-10"
@@ -616,35 +550,27 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
         }}
       />
 
-      {/* 3. TOP STATUS BAR (Chrome styling with subtle info & Skip button) */}
+      {/* 3. TOP BAR (Skip action) */}
       <div
         ref={topBarRef}
-        className="absolute top-0 left-0 right-0 px-6 sm:px-12 py-5 flex items-center justify-between opacity-0 z-40 border-b border-[#232428]/40"
+        className="absolute top-0 left-0 right-0 px-6 sm:px-12 py-5 flex items-center justify-end opacity-0 z-40"
       >
-        <div className="flex items-center gap-3">
-          <span className="w-2 h-2 rounded-full bg-[#8A1B27] animate-pulse" />
-          <span className="text-[11px] font-mono-tech tracking-widest text-[#A7A8AD] uppercase">
-            IBM QUANTUM SYSTEM // AP_NODE_01
-          </span>
-        </div>
-
-        {canSkip && (
+        {canSkip && introState !== 'ENTER_HOME' && (
           <button
             onClick={handleSkip}
             className="pointer-events-auto flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-[#3A0B10] bg-[#18191D]/80 hover:bg-[#6C151E] text-[#D9D9DC] hover:text-white text-[11px] font-mono-tech tracking-wider uppercase backdrop-blur-md transition-all cursor-pointer shadow-lg"
           >
-            <span>Skip Intro</span>
+            <span>Skip to Home</span>
             <FastForward className="w-3 h-3 text-[#8A1B27]" />
           </button>
         )}
       </div>
 
-      {/* 5. STATE 3: EVENT IDENTITY TEXT (Masked, Premium Editorial Typography) */}
+      {/* 4. EVENT IDENTITY TEXT (Masked Editorial Typography - AUTO INTRO) */}
       <div
         ref={typographyRef}
         className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 pointer-events-none opacity-0 z-20"
       >
-        {/* Title masked container */}
         <div className="overflow-hidden mb-3 sm:mb-4">
           <div ref={titleRef}>
             <h1 className="font-serif-title text-4xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight text-[#F5F3F0] font-black uppercase">
@@ -654,7 +580,6 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
           </div>
         </div>
 
-        {/* Subtitle masked container */}
         <div className="overflow-hidden mb-3">
           <div ref={subtitleRef}>
             <p className="text-xs sm:text-sm md:text-base font-mono-tech tracking-[0.25em] text-[#D9D9DC] uppercase">
@@ -663,7 +588,6 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
           </div>
         </div>
 
-        {/* Decade editorial serif tag */}
         <div className="overflow-hidden">
           <div ref={decadeRef}>
             <p className="font-serif-body italic text-sm sm:text-base md:text-lg text-[#A7A8AD]/80 tracking-wide">
@@ -673,7 +597,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
         </div>
       </div>
 
-      {/* 6. STATE 4: LOADING SYSTEM & PROGRESS BAR (3.7s - 5.2s) */}
+      {/* 5. LOADING SYSTEM & PROGRESS BAR (AUTO INTRO) */}
       <div
         ref={loadingContainerRef}
         className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 w-72 sm:w-96 flex flex-col items-center opacity-0 z-20"
@@ -685,7 +609,6 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
           </span>
         </div>
 
-        {/* Progress track: dark track, thin platinum outline, burgundy progress fill */}
         <div className="w-full h-[3px] bg-[#18191D] rounded-full overflow-hidden border border-[#D9D9DC]/25 p-[0.5px]">
           <div
             ref={progressBarRef}
@@ -695,35 +618,215 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({
         </div>
       </div>
 
-      {/* 7. STATE 4B: "SCROLL DOWN" USER-GATED CUE */}
-      {introState === 'WAIT_FIRST_SCROLL' && (
+      {/* ===================================================================== */}
+      {/* 6. WAIT_EXPLORE: "SCROLL TO EXPLORE ↓" (Replacing horizontal loading) */}
+      {/* Matches user reference image directly below event typography          */}
+      {/* ===================================================================== */}
+      {introState === 'WAIT_EXPLORE' && (
         <div
-          ref={firstScrollCueRef}
-          onClick={triggerFirstScroll}
-          className="pointer-events-auto absolute bottom-12 sm:bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 z-40 cursor-pointer group select-none"
+          onClick={() => advanceComponent('next')}
+          className="pointer-events-auto absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3.5 z-40 cursor-pointer group select-none animate-fade-in"
         >
-          <span className="text-xs sm:text-sm font-mono-tech tracking-[0.3em] uppercase text-[#D9D9DC] group-hover:text-white transition-colors">
-            SCROLL DOWN
+          <span className="text-xs sm:text-sm font-mono-tech tracking-[0.35em] uppercase text-[#F5F3F0] group-hover:text-white transition-colors">
+            SCROLL TO EXPLORE
           </span>
-          <div className="w-8 h-8 rounded-full border border-[#8A1B27]/50 flex items-center justify-center bg-[#18191D]/60 backdrop-blur-sm group-hover:border-[#8A1B27] group-hover:scale-110 transition-all">
-            <ChevronDown className="w-4 h-4 text-[#8A1B27] animate-bounce" />
+          <div className="w-10 h-10 rounded-full border border-[#8A1B27] flex items-center justify-center bg-[#131417]/95 backdrop-blur-md group-hover:border-[#B3192B] group-hover:scale-105 transition-all shadow-[0_0_18px_rgba(138,27,39,0.35)]">
+            <ChevronDown className="w-4 h-4 text-[#8A1B27] group-hover:text-[#B3192B] animate-bounce" />
           </div>
         </div>
       )}
 
-      {/* 8. STATE 6: "SCROLL TO ENTER" USER-GATED CUE */}
-      {introState === 'WAIT_SECOND_SCROLL' && (
+      {/* ===================================================================== */}
+      {/* 7. COMPONENT EXPLORATION OVERLAYS (01 → 02 → 03 → 04)                 */}
+      {/* Responsive layout: cleanly adapted for mobile and desktop screens     */}
+      {/* ===================================================================== */}
+      {activeCompData && (
+        <>
+          {/* Header & Step Indicators: Responsive header bar */}
+          <div className="absolute top-16 md:top-20 left-4 sm:left-6 md:left-14 right-4 sm:right-6 md:right-14 z-30 flex items-start justify-between pointer-events-none animate-fade-in">
+            <div>
+              <p className="text-[9px] sm:text-[10px] md:text-xs font-mono-tech tracking-[0.25em] text-[#A7A8AD] uppercase mb-0.5">
+                EXPLORE THE
+              </p>
+              <h2 className="font-serif-title text-xl sm:text-2xl md:text-4xl text-[#F5F3F0] font-light leading-tight tracking-tight uppercase">
+                <span className="text-[#8A1B27] md:block font-bold mr-1.5 md:mr-0">QUANTUM</span>
+                COMPUTER
+              </h2>
+              <p className="text-[11px] md:text-xs font-serif-body italic text-[#A7A8AD]/70 mt-0.5 hidden sm:block">
+                Scroll to discover each layer.
+              </p>
+            </div>
+
+            {/* Component Step Indicators (01 / 04) */}
+            <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2 pt-1">
+              {COMPONENTS.map((c) => {
+                const isActive = c.state === introState;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => callbacksRef.current.onStateChange(c.state)}
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full border transition-all text-[10px] sm:text-[11px] font-mono-tech cursor-pointer ${
+                      isActive
+                        ? 'border-[#8A1B27] bg-[#8A1B27]/30 text-white shadow-[0_0_12px_rgba(138,27,39,0.5)]'
+                        : 'border-[#3A0B10]/60 bg-[#18191D]/50 text-[#A7A8AD] hover:border-[#8A1B27]/50'
+                    }`}
+                  >
+                    <span>{c.number}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* SVG Callout Connecting Line (Desktop) */}
+          <svg className="hidden md:block absolute inset-0 w-full h-full pointer-events-none z-20">
+            {/* Ambient concentric quantum alignment rings */}
+            <circle
+              cx="50%"
+              cy="45%"
+              r="28%"
+              fill="none"
+              stroke="#8A1B27"
+              strokeWidth="1"
+              strokeOpacity="0.12"
+              strokeDasharray="4 6"
+            />
+            <circle
+              cx="50%"
+              cy="45%"
+              r="40%"
+              fill="none"
+              stroke="#8A1B27"
+              strokeWidth="0.8"
+              strokeOpacity="0.08"
+            />
+
+            {/* Target anchor glow dot on the 3D model */}
+            <circle
+              cx={`${activeCompData.targetPercent.x}%`}
+              cy={`${activeCompData.targetPercent.y}%`}
+              r="4.5"
+              fill="#8A1B27"
+              className="animate-ping"
+              opacity="0.4"
+            />
+            <circle
+              cx={`${activeCompData.targetPercent.x}%`}
+              cy={`${activeCompData.targetPercent.y}%`}
+              r="3.5"
+              fill="#FFFFFF"
+              stroke="#8A1B27"
+              strokeWidth="2"
+            />
+
+            {/* Elbow Line connecting text box to target point on model */}
+            {activeCompData.positionSide === 'right' ? (
+              <polyline
+                points={`
+                  ${window.innerWidth > 768 ? window.innerWidth * 0.72 : window.innerWidth * 0.82},${window.innerHeight * (parseInt(activeCompData.boxStyle.top) / 100 + 0.03)}
+                  ${window.innerWidth * (activeCompData.targetPercent.x / 100 + 0.1)},${window.innerHeight * (activeCompData.targetPercent.y / 100)}
+                  ${window.innerWidth * (activeCompData.targetPercent.x / 100)},${window.innerHeight * (activeCompData.targetPercent.y / 100)}
+                `}
+                fill="none"
+                stroke="#8A1B27"
+                strokeWidth="1.5"
+                strokeDasharray="1000"
+                strokeDashoffset="0"
+                className="transition-all duration-500"
+              />
+            ) : (
+              <polyline
+                points={`
+                  ${window.innerWidth > 768 ? window.innerWidth * 0.28 : window.innerWidth * 0.25},${window.innerHeight * (parseInt(activeCompData.boxStyle.top) / 100 + 0.03)}
+                  ${window.innerWidth * (activeCompData.targetPercent.x / 100 - 0.1)},${window.innerHeight * (activeCompData.targetPercent.y / 100)}
+                  ${window.innerWidth * (activeCompData.targetPercent.x / 100)},${window.innerHeight * (activeCompData.targetPercent.y / 100)}
+                `}
+                fill="none"
+                stroke="#8A1B27"
+                strokeWidth="1.5"
+                strokeDasharray="1000"
+                strokeDashoffset="0"
+                className="transition-all duration-500"
+              />
+            )}
+          </svg>
+
+          {/* Callout Text Box:
+              - Mobile: positioned at bottom above the scroll prompt to leave the 3D model completely visible
+              - Desktop: floating at side coordinates with SVG callout line
+          */}
+          <div
+            className="absolute z-30 pointer-events-auto w-[calc(100%-2rem)] max-w-sm left-4 right-4 bottom-24 mx-auto md:w-auto md:left-auto md:right-auto md:bottom-auto transition-all duration-500"
+            style={typeof window !== 'undefined' && window.innerWidth >= 768 ? activeCompData.boxStyle : undefined}
+          >
+            <div className="p-3.5 sm:p-4 md:p-5 rounded-lg border border-[#8A1B27]/40 bg-[#080809]/90 backdrop-blur-md shadow-[0_4px_30px_rgba(108,21,30,0.3)]">
+              {/* Component Number / Layer badge */}
+              <div className="flex items-center justify-between md:block mb-1">
+                <span className="text-xs sm:text-sm md:text-base font-mono-tech font-bold text-[#8A1B27] block">
+                  {activeCompData.number}
+                </span>
+                <span className="text-[10px] font-mono-tech uppercase tracking-widest text-[#A7A8AD]/80 md:hidden">
+                  LAYER {activeCompData.number} OF 04
+                </span>
+              </div>
+
+              {/* Component Name */}
+              <h3 className="font-serif-title text-sm sm:text-base md:text-lg lg:text-xl font-bold text-[#F5F3F0] uppercase tracking-wide mb-1 leading-snug">
+                {activeCompData.name}
+              </h3>
+
+              {/* Short 1-2 line description */}
+              <p className="text-xs sm:text-sm font-serif-body text-[#D9D9DC]/90 leading-relaxed">
+                {activeCompData.description}
+              </p>
+            </div>
+          </div>
+
+          {/* Bottom Prompt: SCROLL TO EXPLORE NEXT LAYER */}
+          <div
+            onClick={() => advanceComponent('next')}
+            className="pointer-events-auto absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 sm:gap-2 z-40 cursor-pointer group select-none"
+          >
+            <span className="text-[10px] sm:text-xs font-mono-tech tracking-[0.25em] uppercase text-[#A7A8AD] group-hover:text-white transition-colors">
+              {activeCompData.id === '04' ? 'SCROLL TO COMPLETE' : 'SCROLL TO DISCOVER NEXT LAYER'}
+            </span>
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-[#8A1B27]/50 flex items-center justify-center bg-[#18191D]/70 backdrop-blur-sm group-hover:border-[#8A1B27] group-hover:scale-110 transition-all">
+              <ChevronDown className="w-3.5 h-3.5 text-[#8A1B27] animate-bounce" />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 8. COMPLETE_COMPUTER: Full machine subtle activation & hold (~1.5s)   */}
+      {/* ===================================================================== */}
+      {introState === 'COMPLETE_COMPUTER' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+          <div className="text-center animate-fade-in">
+            <span className="text-[11px] font-mono-tech tracking-[0.3em] uppercase text-[#8A1B27] block mb-1">
+              SYSTEM RE-SYNCHRONIZATION
+            </span>
+            <h2 className="font-serif-title text-xl sm:text-2xl text-[#F5F3F0] font-light uppercase tracking-wider">
+              QUANTUM CHANDELIER ACTIVE
+            </h2>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 9. WAIT_ENTER: "SCROLL TO ENTER ↓"                                   */}
+      {/* ===================================================================== */}
+      {introState === 'WAIT_ENTER' && (
         <div
-          ref={secondScrollCueRef}
-          onClick={triggerSecondScroll}
-          className="pointer-events-auto absolute bottom-12 sm:bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 z-40 cursor-pointer group select-none"
+          onClick={() => triggerEnterHome()}
+          className="pointer-events-auto absolute bottom-12 sm:bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 z-40 cursor-pointer group select-none animate-fade-in"
         >
-          <div className="px-5 py-2 rounded-full border border-[#8A1B27]/60 bg-[#080809]/80 backdrop-blur-md flex items-center gap-3 shadow-[0_0_25px_rgba(138,27,39,0.35)] group-hover:border-[#8A1B27] transition-all">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#8A1B27] animate-ping" />
-            <span className="text-xs sm:text-sm font-mono-tech tracking-[0.25em] uppercase text-[#F5F3F0]">
+          <div className="px-6 py-2.5 rounded-full border border-[#8A1B27] bg-[#080809]/90 backdrop-blur-md flex items-center gap-3 shadow-[0_0_30px_rgba(138,27,39,0.45)] group-hover:scale-105 transition-all">
+            <span className="w-2 h-2 rounded-full bg-[#8A1B27] animate-ping" />
+            <span className="text-xs sm:text-sm font-mono-tech tracking-[0.25em] uppercase text-[#F5F3F0] font-semibold">
               SCROLL TO ENTER
             </span>
-            <ChevronDown className="w-3.5 h-3.5 text-[#8A1B27] group-hover:translate-y-0.5 transition-transform" />
+            <ChevronDown className="w-4 h-4 text-[#8A1B27] group-hover:translate-y-0.5 transition-transform" />
           </div>
         </div>
       )}

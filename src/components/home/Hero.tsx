@@ -226,7 +226,10 @@ export const Hero: React.FC<HeroProps> = ({
           {/* RIGHT COLUMN: Dedicated Spatial Stage for the 3D Persistent Quantum Computer
               Cleaned up: No redundant 2D photo dump overlapping the 3D model.
               Provides breathing space, soft ambient illumination, and sleek technical telemetry badges. */}
-          <div className="lg:col-span-5 relative flex flex-col items-center lg:items-end justify-center min-h-[440px] lg:min-h-[520px] pointer-events-none select-none">
+          <div
+            id="hero-quantum-stage"
+            className="lg:col-span-5 relative flex flex-col items-center lg:items-end justify-center min-h-[380px] sm:min-h-[440px] lg:min-h-[520px] pointer-events-none select-none my-2 lg:my-0 w-full"
+          >
             {/* Soft ambient radiant aura behind 3D machine */}
             <div
               className={`absolute right-4 lg:right-12 top-1/2 -translate-y-1/2 w-80 sm:w-96 h-80 sm:h-96 rounded-full blur-3xl pointer-events-none transition-opacity duration-1000 ${

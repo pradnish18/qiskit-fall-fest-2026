@@ -1,12 +1,11 @@
 import React, { useRef, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { QuantumComputer } from './QuantumComputer';
+import { QuantumComputer, ActiveComponentId } from './QuantumComputer';
 import { IntroPhase } from '../../types';
 
 interface PersistentQuantumSceneProps {
   introPhase: IntroPhase;
-  assemblyProgress: number; // 0 to 1
   activationProgress: number; // 0 to 1
   transitionProgress: number; // 0 (intro center) to 1 (hero right position)
   sceneOpacity?: number; // 0 to 1
@@ -15,15 +14,34 @@ interface PersistentQuantumSceneProps {
 
 interface SceneContentProps {
   introPhase: IntroPhase;
-  assemblyProgress: number;
   activationProgress: number;
   transitionProgress: number;
   isDarkTheme: boolean;
 }
 
+const getActiveComponentId = (phase: IntroPhase): ActiveComponentId => {
+  switch (phase) {
+    case 'COMPONENT_01':
+      return '01';
+    case 'COMPONENT_02':
+      return '02';
+    case 'COMPONENT_03':
+      return '03';
+    case 'COMPONENT_04':
+      return '04';
+    case 'COMPLETE_COMPUTER':
+    case 'WAIT_ENTER':
+    case 'ENTER_HOME':
+    case 'HOME':
+    case 'COMPUTER_REVEAL':
+      return 'ALL';
+    default:
+      return 'NONE';
+  }
+};
+
 const SceneContent: React.FC<SceneContentProps> = ({
   introPhase,
-  assemblyProgress,
   activationProgress,
   transitionProgress,
   isDarkTheme,
@@ -31,14 +49,15 @@ const SceneContent: React.FC<SceneContentProps> = ({
   const containerGroup = useRef<THREE.Group>(null);
   const mouse = useRef({ x: 0, y: 0, targetX: 0, targetY: 0 });
   const scrollY = useRef(0);
+  const cameraTargetRef = useRef(new THREE.Vector3(0, 0, 0));
 
-  // Mouse parallax handler (clamped strictly to ~4 deg horiz, ~3 deg vert)
+  // Mouse parallax handler (clamped strictly to subtle angle)
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       const nx = (e.clientX / window.innerWidth) * 2 - 1;
       const ny = -(e.clientY / window.innerHeight) * 2 + 1;
-      mouse.current.targetX = nx * 0.07; // ~4 degrees
-      mouse.current.targetY = ny * 0.05; // ~3 degrees
+      mouse.current.targetX = nx * 0.06;
+      mouse.current.targetY = ny * 0.04;
     };
 
     const onScroll = () => {
@@ -54,58 +73,127 @@ const SceneContent: React.FC<SceneContentProps> = ({
     };
   }, []);
 
-  // Frame interpolation: camera & object coordinate transformation from Intro to Home
-  useFrame((state) => {
+  const activeComponent = getActiveComponentId(introPhase);
+
+  // Frame interpolation: camera & object coordinate transformation
+  useFrame((state, delta) => {
     // Smooth mouse damping
     mouse.current.x += (mouse.current.targetX - mouse.current.x) * 0.05;
     mouse.current.y += (mouse.current.targetY - mouse.current.y) * 0.05;
 
-    // Transition interpolation:
-    // Intro center position: x = 0, y = -0.1, z = 0, camera z = 5.2
-    // Hero composition:
-    // Sized around 60–70% of previous size, fully visible with no clipping,
-    // positioned on the right side of the hero, vertically centered,
-    // completely below the navbar and above the bottom event-info row,
-    // never overlapping the left-side title, description, or buttons.
+    const isMobile = state.size.width < 768 || (state.size.width / (state.size.height || 1)) < 0.85;
     const t = transitionProgress; // 0 to 1
 
-    const isMobile = state.size.width < 768;
+    const scrollOffset3D =
+      introPhase === 'HOME'
+        ? (scrollY.current / (window.innerHeight || 1)) * 5.14
+        : 0;
 
-    // Target position for hero (right side, vertically centered, balanced)
-    // Desktop: x = 2.05 shifts it cleanly into the right column without overflowing viewport edge.
-    // y = 0.05 centers it vertically within the hero section between navbar and bottom event-info row.
-    // Scale = 0.68 achieves the 60-70% size requested, keeping top cryogenic cap and bottom cone well within frustum.
-    const heroTargetX = isMobile ? 0.0 : 2.05;
-    const heroTargetY = isMobile ? 0.45 : 0.05;
-    const heroTargetScale = isMobile ? 0.52 : 0.68;
+    // Target position for hero
+    // Desktop: right side hero stage
+    // Mobile: located in between text/buttons and the bottom dates strip (inside hero-quantum-stage)
+    let heroTargetX = 2.05;
+    let heroTargetY = 0.05;
+    const heroTargetScale = isMobile ? 0.44 : 0.68;
+
+    if (isMobile) {
+      heroTargetX = 0.0;
+      const stageEl = typeof document !== 'undefined' ? document.getElementById('hero-quantum-stage') : null;
+      if (stageEl) {
+        const rect = stageEl.getBoundingClientRect();
+        const winH = window.innerHeight || state.size.height || 1;
+        const centerY = rect.top + rect.height / 2;
+        const ndcY = -(centerY / winH) * 2 + 1;
+        const dist = 6.6;
+        const vHeight = 2 * Math.tan(THREE.MathUtils.degToRad(45 / 2)) * dist;
+        const targetWorldY = ndcY * (vHeight / 2);
+        // Position relative to scrollOffset3D so total Y equals targetWorldY exactly
+        heroTargetY = targetWorldY - scrollOffset3D;
+      } else {
+        // Fallback below text content
+        heroTargetY = -1.85;
+      }
+    }
+
+    // Responsive initial scale and position for exploration phase:
+    // Fits comfortably within narrow phone viewports with zero clipping
+    const initialScale = isMobile
+      ? Math.max(0.4, Math.min(0.48, (state.size.width / 400) * 0.46))
+      : 0.95;
+    const startY = isMobile ? -0.32 : -0.1;
 
     const currentX = THREE.MathUtils.lerp(0.0, heroTargetX, t);
-    const currentY = THREE.MathUtils.lerp(-0.1, heroTargetY, t);
+    const currentY = THREE.MathUtils.lerp(startY, heroTargetY, t);
     const currentZ = THREE.MathUtils.lerp(0.0, -0.1, t);
-    const currentScale = THREE.MathUtils.lerp(0.95, heroTargetScale, t);
+    const currentScale = THREE.MathUtils.lerp(initialScale, heroTargetScale, t);
 
     if (containerGroup.current) {
       containerGroup.current.position.x = currentX + mouse.current.x * 0.35;
-      containerGroup.current.position.y = currentY + mouse.current.y * 0.2;
+      containerGroup.current.position.y = currentY + mouse.current.y * 0.2 + scrollOffset3D;
       containerGroup.current.position.z = currentZ;
 
       containerGroup.current.scale.set(currentScale, currentScale, currentScale);
 
-      // Subtle parallax rotation
-      containerGroup.current.rotation.x = mouse.current.y * 0.4;
-      containerGroup.current.rotation.z = -mouse.current.x * 0.2;
+      // Subtle parallax tilt
+      containerGroup.current.rotation.x = mouse.current.y * 0.35;
+      containerGroup.current.rotation.z = -mouse.current.x * 0.18;
     }
 
-    // Camera adjustments: pulling camera to z = 6.2 creates comfortable framing headroom with zero clipping
-    const targetCamZ = THREE.MathUtils.lerp(5.2, 6.2, t);
-    state.camera.position.z += (targetCamZ - state.camera.position.z) * 0.05;
+    // Camera targets based on active component & device responsiveness
+    let targetCamX = 0;
+    let targetCamY = 0;
+    const baseCamZ = isMobile ? 5.8 : 5.2;
+    let targetCamZ = THREE.MathUtils.lerp(baseCamZ, isMobile ? 6.5 : 6.2, t);
+    let targetLookAtY = 0;
+
+    if (introPhase === 'COMPONENT_01') {
+      targetCamX = 0.0;
+      targetCamY = isMobile ? 0.35 : 0.45;
+      targetCamZ = isMobile ? 5.8 : 4.85;
+      targetLookAtY = isMobile ? 0.45 : 0.65;
+    } else if (introPhase === 'COMPONENT_02') {
+      targetCamX = isMobile ? 0.0 : -0.15;
+      targetCamY = isMobile ? 0.18 : 0.25;
+      targetCamZ = isMobile ? 5.8 : 4.8;
+      targetLookAtY = isMobile ? 0.25 : 0.35;
+    } else if (introPhase === 'COMPONENT_03') {
+      targetCamX = isMobile ? 0.0 : 0.2;
+      targetCamY = isMobile ? -0.05 : -0.05;
+      targetCamZ = isMobile ? 5.8 : 4.8;
+      targetLookAtY = isMobile ? -0.08 : -0.1;
+    } else if (introPhase === 'COMPONENT_04') {
+      targetCamX = isMobile ? 0.0 : -0.15;
+      targetCamY = isMobile ? -0.28 : -0.35;
+      targetCamZ = isMobile ? 5.8 : 4.65;
+      targetLookAtY = isMobile ? -0.42 : -0.55;
+    } else if (introPhase === 'ENTER_HOME' || introPhase === 'HOME') {
+      targetCamX = 0;
+      targetCamY = 0;
+      targetCamZ = isMobile ? 6.5 : 6.2;
+      targetLookAtY = 0;
+    } else {
+      // COMPLETE_COMPUTER, WAIT_ENTER, COMPUTER_REVEAL
+      targetCamX = 0;
+      targetCamY = 0;
+      targetCamZ = baseCamZ;
+      targetLookAtY = 0;
+    }
+
+    // Smooth camera interpolation
+    const camLerpFactor = 0.06;
+    state.camera.position.x += (targetCamX - state.camera.position.x) * camLerpFactor;
+    state.camera.position.y += (targetCamY - state.camera.position.y) * camLerpFactor;
+    state.camera.position.z += (targetCamZ - state.camera.position.z) * camLerpFactor;
+
+    cameraTargetRef.current.y += (targetLookAtY - cameraTargetRef.current.y) * camLerpFactor;
+    state.camera.lookAt(cameraTargetRef.current.x, cameraTargetRef.current.y, cameraTargetRef.current.z);
   });
 
   // Lighting parameters based on theme
   const ambientIntensity = isDarkTheme ? 0.9 : 1.3;
-  const keyLightIntensity = isDarkTheme ? 3.5 : 4.2;
+  const keyLightIntensity = isDarkTheme ? 3.6 : 4.2;
   const rimLightIntensity = isDarkTheme ? 2.5 : 1.8;
-  const rubyGlowIntensity = activationProgress * (isDarkTheme ? 4.0 : 2.8);
+  const rubyGlowIntensity = activationProgress * (isDarkTheme ? 4.2 : 3.0);
 
   return (
     <>
@@ -122,7 +210,7 @@ const SceneContent: React.FC<SceneContentProps> = ({
       {/* Fill Light (Soft cool graphite fill from front-left) */}
       <directionalLight
         position={[-4, 2, 3]}
-        intensity={keyLightIntensity * 0.4}
+        intensity={keyLightIntensity * 0.42}
         color="#D9D9DC"
       />
 
@@ -145,7 +233,7 @@ const SceneContent: React.FC<SceneContentProps> = ({
       {/* Persistent Quantum Machine Container */}
       <group ref={containerGroup}>
         <QuantumComputer
-          assemblyProgress={assemblyProgress}
+          activeComponent={activeComponent}
           activationProgress={activationProgress}
           isDarkTheme={isDarkTheme}
         />
@@ -156,23 +244,25 @@ const SceneContent: React.FC<SceneContentProps> = ({
 
 export const PersistentQuantumScene: React.FC<PersistentQuantumSceneProps> = ({
   introPhase,
-  assemblyProgress,
   activationProgress,
   transitionProgress,
   sceneOpacity,
   isDarkTheme = true,
 }) => {
   // Determine if the 3D scene should be visible:
-  // Early intro phases (blank, line, field, text, loading, wait 1st scroll) keep canvas hidden.
-  // Starting from ASSEMBLY and onwards, the 3D quantum computer is fully visible.
+  // INTRO and WAIT_EXPLORE keep canvas invisible (black screen)
+  // COMPUTER_REVEAL onwards reveals the 3D quantum computer
   const isSceneActive =
-    introPhase === 'ASSEMBLY' ||
-    introPhase === 'ACTIVATION' ||
-    introPhase === 'WAIT_SECOND_SCROLL' ||
+    introPhase === 'COMPUTER_REVEAL' ||
+    introPhase === 'COMPONENT_01' ||
+    introPhase === 'COMPONENT_02' ||
+    introPhase === 'COMPONENT_03' ||
+    introPhase === 'COMPONENT_04' ||
+    introPhase === 'COMPLETE_COMPUTER' ||
+    introPhase === 'WAIT_ENTER' ||
     introPhase === 'ENTER_HOME' ||
     introPhase === 'HOME';
 
-  // If sceneOpacity is explicitly controlled and > 0, honor it, otherwise default to 1 when active
   const opacityValue = isSceneActive
     ? sceneOpacity !== undefined && sceneOpacity > 0
       ? sceneOpacity
@@ -200,7 +290,6 @@ export const PersistentQuantumScene: React.FC<PersistentQuantumSceneProps> = ({
       >
         <SceneContent
           introPhase={introPhase}
-          assemblyProgress={assemblyProgress}
           activationProgress={activationProgress}
           transitionProgress={transitionProgress}
           isDarkTheme={isDarkTheme}
